@@ -1,0 +1,125 @@
+# 每 12 小时采集一次，并把 web/ 目录发布到 GitHub Pages 与阿里云。
+#
+# 定时任务的 cron 使用 UTC：22:00 UTC = 06:00 北京时间，10:00 UTC = 18:00 北京时间。
+#
+# 关于 SQLite：data/gamefeed.db 保存着"已见过"的条目和抽取结果，靠 actions/cache
+# 在两次运行之间传递。缓存未命中时所有条目会被重新抽取一遍（规则引擎免费，LLM 会
+# 花钱），所以不要随意改 key 前缀。
+#
+# 想用 LLM 抽取时，在仓库 Settings 里加：
+#   Secrets -> GAMENEWS_LLM_API_KEY, GAMENEWS_LLM_BASE_URL
+#   Variables -> GAMENEWS_LLM_MODEL
+# 未配置时会自动退回规则引擎。
+#
+# 部署拆成两个互不影响的 job，二者都 needs: collect，任一失败不阻塞另一个：
+#   - deploy  → GitHub Pages
+#   - aliyun  → rsync 同步到阿里云 /www/wwwroot/sites/gameseek/
+# aliyun 需要仓库配好 SSH_HOST / SSH_USER / SSH_KEY 三个 Secrets，且服务器已装 rsync。
+
+name: collect-and-deploy
+
+on:
+  schedule:
+    - cron: '0 22 * * *'
+    - cron: '0 10 * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'collector/**'
+      - '.github/workflows/collect.yml'
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: collect-and-deploy
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.commit.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Restore collector database
+        uses: actions/cache@v4
+        with:
+          path: data
+          key: gamefeed-db-${{ github.run_id }}
+          restore-keys: |
+            gamefeed-db-
+
+      - name: Collect
+        env:
+          GAMENEWS_LLM_BASE_URL: ${{ secrets.GAMENEWS_LLM_BASE_URL }}
+          GAMENEWS_LLM_API_KEY: ${{ secrets.GAMENEWS_LLM_API_KEY }}
+          GAMENEWS_LLM_MODEL: ${{ vars.GAMENEWS_LLM_MODEL }}
+        run: |
+          set -e
+          if [ -n "$GAMENEWS_LLM_API_KEY" ]; then
+            python -m collector.main --llm || python -m collector.main
+          else
+            python -m collector.main
+          fi
+
+      - name: Commit refreshed feed
+        id: commit
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add web/data/news.json
+          if git diff --quiet --cached; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            git commit -m "chore(data): refresh game news feed"
+            git push
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Package site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: web
+
+  deploy:
+    needs: collect
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
+
+  # 与上面 deploy 并列、互不影响：它失败不会让 Pages 不发布，反之亦然。
+  aliyun:
+    needs: collect
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 推送静态站到阿里云
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_KEY: ${{ secrets.SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          rsync -az --delete \
+            -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes" \
+            web/ "$SSH_USER@$SSH_HOST:/www/wwwroot/sites/gameseek/"
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes \
+            "$SSH_USER@$SSH_HOST" \
+            "chown -R www:www /www/wwwroot/sites/gameseek && find /www/wwwroot/sites/gameseek -type d -exec chmod 755 {} \; && find /www/wwwroot/sites/gameseek -type f -exec chmod 644 {} \;"

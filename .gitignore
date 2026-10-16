@@ -1,0 +1,11 @@
+# 采集缓存、数据库与临时文件
+data/cache/
+data/*.db
+data/*.db-journal
+web/data/*.tmp
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.venv*/

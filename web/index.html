@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>新游雷达 · 每日新游发布情报</title>
+<meta name="description" content="自动聚合 IGN、GameSpot、Polygon、Gematsu、机核、GameLook 等主流游戏媒体的每日新作公布与发售情报，多源去重后按平台、类型和热度整理。">
+<link rel="stylesheet" href="styles.css?v=3">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="8"></circle>
+          <circle cx="12" cy="12" r="3"></circle>
+        </svg>
+      </span>
+      <div class="brand-text">
+        <h1>新游雷达</h1>
+        <p>主流游戏媒体的每日新作情报，自动去重聚合</p>
+      </div>
+    </div>
+
+    <div class="topbar-actions">
+      <span class="chip chip-quiet" id="health-badge" hidden></span>
+      <span class="chip chip-quiet" id="generated-at">正在载入数据…</span>
+      <button class="icon-btn" id="theme-toggle" type="button" aria-label="切换配色">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6L17 7M7 17l-1.4 1.4"></path>
+          <circle cx="12" cy="12" r="4"></circle>
+        </svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main class="shell">
+
+  <section class="panel stats-panel" aria-label="概览">
+    <div class="stat-grid" id="stat-grid"></div>
+    <div class="platform-bars" id="platform-bars"></div>
+  </section>
+
+  <section class="panel filter-panel" aria-label="筛选">
+    <div class="filter-row">
+      <span class="filter-label">时间</span>
+      <div class="chips" id="filter-days"></div>
+      <span class="filter-label">排序</span>
+      <div class="chips" id="filter-sort"></div>
+      <label class="switch">
+        <input type="checkbox" id="only-new">
+        <span>只看新游</span>
+      </label>
+    </div>
+    <div class="filter-row">
+      <span class="filter-label">平台</span>
+      <div class="chips" id="filter-platform"></div>
+    </div>
+    <div class="filter-row">
+      <span class="filter-label">类型</span>
+      <div class="chips" id="filter-category"></div>
+      <span class="filter-label">语言</span>
+      <div class="chips" id="filter-lang"></div>
+    </div>
+    <div class="filter-row">
+      <span class="search-wrap">
+        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <circle cx="11" cy="11" r="7"></circle>
+          <path d="M20 20l-3.5-3.5"></path>
+        </svg>
+        <input type="search" id="search" placeholder="搜索游戏名、厂商或媒体…" autocomplete="off">
+      </span>
+      <button class="text-btn" id="reset" type="button">重置筛选</button>
+      <span class="result-count" id="result-count"></span>
+    </div>
+  </section>
+
+  <section class="feed" id="feed" aria-label="情报列表"></section>
+
+  <section class="panel empty-state" id="empty-state" hidden></section>
+
+  <footer class="site-footer">
+    <p>
+      本页仅存储新闻<strong>标题、摘要与原文链接</strong>，不作全文转载；每条情报均标注来源并可跳转原文。
+      数据由本地采集器定期更新，版权归各原始媒体所有。
+    </p>
+    <p class="footer-meta" id="footer-meta"></p>
+  </footer>
+
+</main>
+
+<script src="app.js?v=3"></script>
+</body>
+</html>
