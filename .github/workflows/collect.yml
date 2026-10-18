@@ -83,7 +83,9 @@ jobs:
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
             git commit -m "chore(data): refresh game news feed"
-            git push
+            # 采集耗时数分钟，期间远端 main 可能被别的提交推进：push 被拒时先变基再推一次，
+            # 避免整个运行因非快进失败（2026-10-18 run 39124593231 即因此失败并被跳过部署）。
+            git push || { git pull --rebase origin main && git push; }
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
