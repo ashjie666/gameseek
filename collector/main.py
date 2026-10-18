@@ -11,6 +11,7 @@ Run from the project root:
 import argparse
 import json
 import os
+import re
 import sys
 from collections import Counter
 from datetime import datetime, timezone
@@ -33,6 +34,43 @@ EXPORT_PATH = PROJECT_ROOT / "web" / "data" / "news.json"
 
 CATEGORY_ORDER = [name for name, _ in CATEGORY_RULES] + ["other"]
 PLATFORM_ORDER = ["PC", "PS5", "Xbox", "Switch 2", "Switch", "Mobile", "VR", "Mac", "PS4"]
+
+# --------------------------------------------------------------------------
+# Trade-press filter
+# --------------------------------------------------------------------------
+# Investment, M&A, earnings, layoffs, union action, studio openings/closures and
+# weekly industry digests are coverage *about companies*, not about games: they
+# carry no release and dilute a new-release radar. Matched on the headline (the
+# text the reader actually sees) and applied at export time, so the database
+# keeps every item and the word list stays easy to tune.
+INDUSTRY_CUES = re.compile(
+    "投资|入股|收购|并购|融资|股权|押注|连投|出手|撤资|退出|拆分|脱离|独立运营|重组|财报|营收|净利|预亏|"
+    "亏损|裁员|买量|周报|盘点|复盘|行业大事|榜单|白皮书|报告|趋势|降本|高管|离职|招聘|上市|IPO|估值|"
+    "大厂|厂商|发行商|工作室|团队|出海|游戏圈|流水|月收入|年入|"
+    r"\bacquir(e|es|ed|ing)\b|\bacquisition\b|\binvest(ed|ing|s|ment|ments|or|ors)?\b|\bfunding\b|"
+    r"\braises?\s+\$|\blayoffs?\b|\bredundanc\w*\b|\bshuts?\s+down\b|\bclose[sd]?\s+down\b|"
+    r"\bsplits?\s+(from|with)\b|\bbecomes independent\b|\bgoes independent\b|\bfounded by\b|"
+    r"\bappoints\b|\bresigns\b|\bsteps down\b|\brevenue\b|\bearnings\b|\bfinancial results\b|"
+    r"\bCEO\b|\bboard member\b|\bmerges?\b|\bunion\b|\bfurlough\w*\b",
+    re.I,
+)
+
+# Headlines that trip a cue above but are genuinely about a game. Listed as
+# distinctive lowercase substrings rather than whole titles, so a small edit to
+# the source headline does not silently put the story back behind the filter.
+INDUSTRY_WHITELIST = (
+    "shut down the flow of suspicious gold",  # WoW gold-seller crackdown, not a company story
+    "wardogs is getting loadouts",  # here "CEO confirms" is about game content
+    "电子集换式卡牌游戏来了",  # "大厂" sits inside a game announcement
+)
+
+
+def _is_industry_news(title):
+    """True when a headline reads as trade-press business coverage rather than a game."""
+    lowered = (title or "").lower()
+    if any(entry in lowered for entry in INDUSTRY_WHITELIST):
+        return False
+    return bool(INDUSTRY_CUES.search(title or ""))
 
 
 # --------------------------------------------------------------------------
@@ -240,6 +278,11 @@ def build_export(prepared, assignments, reports, window_days):
             ],
         })
 
+    # Trade-press business coverage is dropped here rather than at collection: the
+    # database stays a faithful record, only the exported feed is curated.
+    industry_filtered = sum(1 for c in clusters if _is_industry_news(c["title"]))
+    clusters = [c for c in clusters if not _is_industry_news(c["title"])]
+
     clusters.sort(key=lambda c: (c["is_new_release"], c["last_seen"], c["heat"]), reverse=True)
 
     today = datetime.now(timezone.utc).date().isoformat()
@@ -251,6 +294,7 @@ def build_export(prepared, assignments, reports, window_days):
         "window_days": window_days,
         "items": len(prepared),
         "clusters": len(clusters),
+        "industry_filtered": industry_filtered,
         "new_release_clusters": sum(1 for c in clusters if c["is_new_release"]),
         "today_clusters": sum(1 for c in clusters if (c["last_seen"] or "").startswith(today)),
         "multi_source_clusters": sum(1 for c in clusters if c["heat"] > 1),

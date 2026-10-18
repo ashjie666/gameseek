@@ -60,6 +60,13 @@ MEDIA_ZH = [
     {"id": "gcores", "name": "机核 GCORES", "lang": "zh", "kind": "rss", "url": "https://www.gcores.com/rss"},
     {"id": "chuapp", "name": "触乐", "lang": "zh", "kind": "rss", "url": "https://www.chuapp.com/feed"},
     {"id": "gamelook", "name": "GameLook", "lang": "zh", "kind": "rss", "url": "http://www.gamelook.com.cn/feed"},
+    # Industry / China-outbound trade press. These cover domestic studios and the
+    # overseas push of Chinese publishers, which the overseas consumer media above
+    # do not report. Probed 2026-10-18: each returned items with parsed dates.
+    {"id": "gameres", "name": "GameRes 游资网", "lang": "zh", "kind": "rss", "url": "https://www.gameres.com/rss.xml"},
+    {"id": "youxichaguan", "name": "游戏茶馆", "lang": "zh", "kind": "rss", "url": "https://www.youxichaguan.com/feed"},
+    {"id": "youxituoluo", "name": "游戏陀螺", "lang": "zh", "kind": "rss", "url": "https://www.youxituoluo.com/feed"},
+    {"id": "gamewower", "name": "游戏价值论", "lang": "zh", "kind": "rss", "url": "https://www.gamewower.com/feed/"},
 ]
 
 # --------------------------------------------------------------------------
@@ -91,8 +98,14 @@ MEDIA_ZH = [
 #   steamnews, steamupcoming     -> read timeout (store.steampowered.com blocked)
 #   gamelook https variant       -> connection refused (use the http URL above)
 #   gamersky, 3dmgame            -> HTTP 403 / 404
-#   ali213, ign_cn, indienova, gameres, vgtime, a9vg, youxiputao
-#                                 -> HTTP 404 (feed path no longer exists)
+#   ali213, ign_cn, indienova, vgtime, a9vg, youxiputao
+#                                 -> HTTP 404 (feed path no longer exists). youxiputao's
+#                                   homepage is live (200) but advertises no RSS/Atom link.
+#   sykong.com (手游那点事), jingcore.com (竞核)
+#                                 -> TLS CERTIFICATE_VERIFY_FAILED with the stdlib trust
+#                                   store (incomplete chain); http:// variant answers 403.
+#   youxiribao.com (游戏日报)     -> DNS getaddrinfo failed
+#   news.17173.com                -> no feed endpoint (404 on every /rss.xml path tried)
 #   gamingonlinux                -> HTTP 404
 #   yystv, cowlevel              -> feed resolves but returns zero entries
 #   gnews_en_release, gnews_en_announce, gnews_zh_release, gnews_zh_date
