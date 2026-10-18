@@ -349,6 +349,8 @@ button, input, select { font: inherit; color: inherit; }
 }
 
 .switch input { accent-color: var(--brand); margin: 0; cursor: pointer; }
+/* 第二个开关紧跟第一个，不再各自吃掉一份 auto 外边距 */
+.switch + .switch { margin-left: 0; }
 
 .search-wrap {
   position: relative;
@@ -468,6 +470,14 @@ button, input, select { font: inherit; color: inherit; }
 }
 
 .tag-heat svg { width: 11px; height: 11px; }
+
+/* 国产标签：实心 brand 徽章，与描边的分类标签、热度标签区分开 */
+.tag-cn {
+  color: var(--bg);
+  background: var(--brand);
+  border-color: var(--brand);
+  font-weight: 600;
+}
 
 .card-time {
   margin-left: auto;

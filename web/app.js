@@ -38,6 +38,36 @@ const SORT_OPTIONS = [
 const ICON_HEAT = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg>';
 const ICON_CHEVRON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>';
 
+/* 国产判定：上游是各家游戏媒体的 RSS，采集结果里没有厂商/国家字段
+   （cluster.developer / publisher 实测恒为空），所以用「国产厂商 + 代表作品」关键词表，
+   在游戏名与标题文本里匹配。表可随时增补；命中即视为国产（宁可漏判，避免误判）。 */
+const CN_KEYWORDS = [
+  // 厂商 / 发行商（中文名 + 英文别名）
+  '米哈游', 'mihoyo', 'hoyoverse', '腾讯', 'tencent', '天美', 'timi studio', '光子工作室',
+  '网易', 'netease', '雷火', '完美世界', 'perfect world', '叠纸', 'papergames', 'infold',
+  '鹰角', 'hypergryph', 'gryphline', '库洛', 'kuro games', '莉莉丝', 'lilith games',
+  '心动网络', 'xd inc', '散爆', 'sunborn', '灵游坊', 's-game', '游戏科学', 'game science',
+  '西山居', 'seasun', '祖龙', 'zulong', '三七互娱', '37 interactive', '沐瞳', 'moonton',
+  '朝夕光年', 'nuverse', '巨人网络', '盛趣', 'shanda', '中手游', 'cmge', '波克城市',
+  '字节跳动', 'bytedance', '哔哩哔哩', 'bilibili',
+  'chinese developer', 'chinese studio', 'china-based',
+  // 代表作品（中文名 + 英文名）
+  '原神', 'genshin impact', '崩坏', 'honkai', '绝区零', 'zenless zone zero',
+  '明日方舟', 'arknights', '鸣潮', 'wuthering waves', '无限暖暖', 'infinity nikki',
+  '黑神话', 'black myth', '永劫无间', 'naraka', '逆水寒', 'justice online',
+  '王者荣耀', 'honor of kings', '三角洲行动', 'delta force', '影之刃', 'phantom blade',
+  '燕云十六声', 'where winds meet', '太吾绘卷', 'scroll of taiwu', '鬼谷八荒',
+  '戴森球计划', 'dyson sphere program', '光明记忆', 'bright memory', '帕斯卡契约',
+  '卡拉彼丘', 'strinova', '少女前线', 'girls\' frontline', '碧蓝航线', 'azur lane',
+  '尘白禁区', 'snowbreak', '战双帕弥什', 'punishing: gray raven', '幻塔', 'tower of fantasy',
+  '铃兰之剑', 'sword of convallaria', '剑与远征', 'afk arena', '万国觉醒',
+  '第五人格', 'identity v', '蛋仔派对', 'eggy party', '光遇', 'sky: children',
+  '阴阳师', 'onmyoji', '剑网三', '剑网3', 'jx3', '古剑奇谭', 'gujian', '仙剑',
+  '归龙潮', '白荆回廊', '星球重启', '荒野行动', '明日之后', 'lifeafter',
+  '枪火重生', 'gunfire reborn',
+];
+const CN_CACHE = new Map();
+
 const state = {
   days: 7,
   platform: 'all',
@@ -45,6 +75,7 @@ const state = {
   lang: 'all',
   sort: 'new',
   onlyNew: false,
+  onlyCn: false,
   query: '',
   expanded: new Set(),
 };
@@ -145,6 +176,19 @@ function matchesQuery(cluster, query) {
   return parts.join(' ').toLowerCase().includes(query);
 }
 
+/* 命中关键词表即判为国产。结果按 cluster.id 缓存，避免每次筛选/渲染重复扫描文本。 */
+function isChineseGame(cluster) {
+  if (CN_CACHE.has(cluster.id)) return CN_CACHE.get(cluster.id);
+  // 只匹配「游戏名 / 标题 / 各来源标题 / 厂商」，刻意不扫摘要正文：
+  // 摘要里经常引用别家厂商做对比，扫正文会把「文章提到腾讯」误判成「这款游戏是国产」。
+  const parts = [cluster.game_name, cluster.title, cluster.developer, cluster.publisher];
+  for (const item of cluster.items || []) parts.push(item.title);
+  const text = parts.join(' ').toLowerCase();
+  const hit = CN_KEYWORDS.some((word) => text.includes(word.toLowerCase()));
+  CN_CACHE.set(cluster.id, hit);
+  return hit;
+}
+
 function visibleClusters() {
   if (!DATA) return [];
   const cutoff = cutoffTime();
@@ -156,6 +200,7 @@ function visibleClusters() {
     if (state.platform !== 'all' && !(cluster.platforms || []).includes(state.platform)) return false;
     if (state.category !== 'all' && cluster.category !== state.category) return false;
     if (state.onlyNew && !cluster.is_new_release) return false;
+    if (state.onlyCn && !isChineseGame(cluster)) return false;
     if (state.lang !== 'all') {
       const langs = new Set(cluster.items.map((item) => item.lang));
       if (!langs.has(state.lang)) return false;
@@ -248,6 +293,7 @@ function renderFilters() {
   });
 
   $('only-new').checked = state.onlyNew;
+  $('only-cn').checked = state.onlyCn;
 }
 
 /* -------------------------------------------------------------------------
@@ -307,9 +353,11 @@ function buildSourceList(cluster) {
 function renderCard(cluster) {
   const accent = `var(--c-${cluster.category})`;
   const expanded = state.expanded.has(cluster.id);
+  const isCn = isChineseGame(cluster);
 
   const head = el('div', { class: 'card-head' }, [
     el('span', { class: 'tag', text: CATEGORY_LABELS[cluster.category] || '其他' }),
+    isCn ? el('span', { class: 'tag tag-cn', text: '国产' }) : null,
     cluster.heat > 1
       ? el('span', { class: 'tag-heat', title: `${cluster.heat} 家媒体报道` }, [
           el('span', { class: 'heat-icon', icon: ICON_HEAT }),
@@ -401,7 +449,7 @@ function render() {
   if (!rows.length) {
     feed.replaceChildren();
     renderEmpty('没有符合当前筛选条件的情报',
-      '试试放宽时间范围、清除搜索词，或关闭「只看新游」。');
+      '试试放宽时间范围、清除搜索词，或关闭「只看新游」「只看国产」。');
     return;
   }
 
@@ -456,6 +504,11 @@ async function boot() {
     render();
   });
 
+  $('only-cn').addEventListener('change', (event) => {
+    state.onlyCn = event.target.checked;
+    render();
+  });
+
   let timer = 0;
   $('search').addEventListener('input', (event) => {
     clearTimeout(timer);
@@ -470,6 +523,7 @@ async function boot() {
     state.lang = 'all';
     state.sort = 'new';
     state.onlyNew = false;
+    state.onlyCn = false;
     state.query = '';
     state.expanded.clear();
     $('search').value = '';
